@@ -53,6 +53,14 @@
     box.appendChild(btn);
   }
 
+  // 调试：?menu=1 自动打开菜单
+  if (/[?&]menu=1/.test(location.search)) {
+    setTimeout(function () {
+      var stage = document.querySelector('#tp-root .tp-stage');
+      if (stage) stage.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    }, 3500);
+  }
+
   var tries = 0;
   var timer = setInterval(function () {
     var root = document.getElementById('tp-root');
