@@ -16,15 +16,30 @@
     if (over !== hovering) { hovering = over; api.hover(over); }
   }, true);
 
+  // 把命中矩形上报给主进程（它自己轮询光标，避免点击抢时序）
+  if (api.bounds) {
+    setInterval(function () {
+      var layers = document.querySelector('#tp-root .tp-layers');
+      if (!layers) return;
+      var r = layers.getBoundingClientRect();
+      api.bounds({ x: r.left, y: r.top, w: r.width, h: r.height, pad: 8 });
+    }, 500);
+  }
+
   // 2) 去掉所有计费相关节点（余额、今日、本轮、计费设置组）
   var KILL = ['.tp-bal', '.tp-metas', '.tp-met'];
   function stripBilling(scope) {
     KILL.forEach(function (sel) {
       scope.querySelectorAll(sel).forEach(function (n) { n.remove() });
     });
+    var BAD = /今日消耗|本轮消耗|按压弹出余额|刷新间隔|余额|计费|任务完成通知/;
     scope.querySelectorAll('.tp-row').forEach(function (row) {
-      var t = row.textContent || '';
-      if (/今日消耗|本轮消耗|按压弹出余额|刷新间隔|余额/.test(t)) row.remove();
+      if (BAD.test(row.textContent || '')) row.remove();
+    });
+    // 「刷新余额」「计费显示」这类按钮/小标题也一起摘掉
+    scope.querySelectorAll('.tp-menu button, .tp-menu .tp-sub, .tp-menu .tp-tip, .tp-menu .tp-sec, .tp-menu .tp-h, .tp-menu .tp-label').forEach(function (n) {
+      var t = (n.textContent || '').trim();
+      if (t && BAD.test(t) && !n.classList.contains('tp-switch')) n.remove();
     });
     var small = scope.querySelector('.tp-head small');
     if (small) small.textContent = '独立版 · 无计费';
@@ -38,6 +53,11 @@
       if (scope) stripBilling(scope.closest('.tp-menu, .tp-bubble') || scope);
     }
   });
+
+  // 3.5) 独立版没有计费，刷新余额按钮直接摘掉
+  function stripRefresh() {
+    document.querySelectorAll('.tp-menu [data-refresh-bal]').forEach(function (b) { b.remove() });
+  }
 
   // 4) 菜单里加「退出桌宠」
   function addQuitButton() {
@@ -66,9 +86,8 @@
     var root = document.getElementById('tp-root');
     if (!root) { if (++tries > 600) clearInterval(timer); return; }
     clearInterval(timer);
-    mo.observe(root, { childList: true, subtree: true });
-    stripBilling(root);
-    setInterval(addQuitButton, 400);
-    setInterval(function () { stripBilling(root) }, 1200);
+    mo.observe(document.body, { childList: true, subtree: true });
+    stripBilling(document.body);
+    setInterval(function () { stripBilling(document.body); stripRefresh(); addQuitButton() }, 600);
   }, 150);
 })();
