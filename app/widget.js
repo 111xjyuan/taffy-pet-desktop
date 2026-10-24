@@ -1989,6 +1989,8 @@
     stage.addEventListener('contextmenu', function (e) {
       e.preventDefault()
       e.stopPropagation()
+      // 菜单元素可能被外部脚本移走过，此时 menuOpen 会卡在 true，右键就「点了没反应」
+      if (menuEl && !menuEl.isConnected) { menuOpen = false; menuEl = null }
       if (menuOpen) closeMenu(); else openMenu('setting')
     })
     // 滚轮缩放（不改变位置，只以底边为锚）
