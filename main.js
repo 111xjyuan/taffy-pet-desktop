@@ -81,6 +81,33 @@ ipcMain.on('pet-hover', (evt, over) => {
   if (!win) return;
   win.setIgnoreMouseEvents(!over, { forward: true });
 });
+
+// 命中区：渲染层上报矩形，主进程每 60ms 轮询光标自己判断，避免「先移动到身上再点」的时序抖动
+let petRect = null;       // 屏幕坐标
+let ignoring = true;
+ipcMain.on('pet-bounds', (evt, r) => {
+  if (!r) { petRect = null; return }
+  const scale = screen.getPrimaryDisplay().scaleFactor || 1;
+  petRect = { x: r.x / scale, y: r.y / scale, w: r.w / scale, h: r.h / scale, pad: r.pad || 6 };
+});
+
+function syncIgnore() {
+  if (!win || win.isDestroyed()) return;
+  let over = false;
+  if (petRect) {
+    const p = screen.getCursorScreenPoint();
+    const d = screen.getPrimaryDisplay();
+    const pad = petRect.pad || 6;
+    const x = p.x - d.bounds.x, y = p.y - d.bounds.y;
+    over = x >= petRect.x - pad && x <= petRect.x + petRect.w + pad &&
+           y >= petRect.y - pad && y <= petRect.y + petRect.h + pad;
+  }
+  if (over !== !ignoring) {
+    ignoring = !over;
+    win.setIgnoreMouseEvents(ignoring, { forward: true });
+  }
+}
+setInterval(syncIgnore, 60);
 ipcMain.on('pet-quit', () => app.quit());
 ipcMain.on('pet-top', (evt, on) => { if (win) win.setAlwaysOnTop(!!on, 'screen-saver') });
 ipcMain.on('pet-open-assets', () => shell.openPath(ASSET_DIR));
