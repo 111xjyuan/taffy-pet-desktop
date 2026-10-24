@@ -1,0 +1,15 @@
+{
+  "name": "taffy-pet-desktop",
+  "version": "0.1.0",
+  "description": "永雏塔菲 桌面宠物（独立版，不需要 DSH）",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron . --no-sandbox",
+    "seed": "node scripts/seed-assets.mjs",
+    "serve": "node test-server.mjs"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^33.2.0"
+  }
+}
