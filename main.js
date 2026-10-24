@@ -87,20 +87,29 @@ let petRect = null;       // 屏幕坐标
 let ignoring = true;
 ipcMain.on('pet-bounds', (evt, r) => {
   if (!r) { petRect = null; return }
-  const scale = screen.getPrimaryDisplay().scaleFactor || 1;
-  petRect = { x: r.x / scale, y: r.y / scale, w: r.w / scale, h: r.h / scale, pad: r.pad || 6 };
+  // 渲染层的 CSS px 与 DIP 是 1:1，不能按 scaleFactor 再除一次（那样命中区会整体缩小、点不准）
+  petRect = { x: r.x, y: r.y, w: r.w, h: r.h, pad: r.pad || 6, busy: !!r.busy };
+  const now = Date.now();
+  if (!global.__lastBoundsLog || now - global.__lastBoundsLog > 1500) {
+    global.__lastBoundsLog = now;
+    log('bounds ' + JSON.stringify(petRect) + ' ignoring=' + ignoring + ' scale=' + screen.getPrimaryDisplay().scaleFactor);
+  }
 });
 
 function syncIgnore() {
   if (!win || win.isDestroyed()) return;
   let over = false;
-  if (petRect) {
+  if (petRect && petRect.busy) {
+    // 拖拽 / 按着菜单拖动时一律保持可交互，否则中途会「断手」
+    over = true;
+  } else if (petRect && petRect.w > 0) {
     const p = screen.getCursorScreenPoint();
     const d = screen.getPrimaryDisplay();
     const pad = petRect.pad || 6;
     const x = p.x - d.bounds.x, y = p.y - d.bounds.y;
-    over = x >= petRect.x - pad && x <= petRect.x + petRect.w + pad &&
-           y >= petRect.y - pad && y <= petRect.y + petRect.h + pad;
+    if (petRect.w <= 0) over = false;
+    else over = x >= petRect.x - pad && x <= petRect.x + petRect.w + pad &&
+                y >= petRect.y - pad && y <= petRect.y + petRect.h + pad;
   }
   if (over !== !ignoring) {
     ignoring = !over;
@@ -108,6 +117,7 @@ function syncIgnore() {
   }
 }
 setInterval(syncIgnore, 60);
+ipcMain.on('pet-log', (e, m) => log('RENDERER ' + m));
 ipcMain.on('pet-quit', () => app.quit());
 ipcMain.on('pet-top', (evt, on) => { if (win) win.setAlwaysOnTop(!!on, 'screen-saver') });
 ipcMain.on('pet-open-assets', () => shell.openPath(ASSET_DIR));
