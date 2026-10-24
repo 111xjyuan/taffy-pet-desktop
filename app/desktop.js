@@ -5,11 +5,34 @@
 
   // 1) 只有鼠标压在塔菲身上时才让窗口接收事件，其余区域完全穿透
   var hovering = false;
+  function visible(el) {
+    if (!el) return false;
+    var s = getComputedStyle(el);
+    if (s.display === 'none' || s.visibility === 'hidden' || Number(s.opacity) === 0) return false;
+    var r = el.getBoundingClientRect();
+    return !!(r.width && r.height);
+  }
+  // 可交互范围 = 塔菲本体 + 打开中的菜单 + 气泡（菜单在左侧，必须一起算，否则点不到）
+  function hitRect() {
+    // 菜单/气泡是挂在 body 上的，不在 #tp-root 里面
+    var sels = ['#tp-root .tp-layers', '.tp-menu', '.tp-bubble'];
+    var x = 1e9, y = 1e9, x2 = -1e9, y2 = -1e9, any = false;
+    for (var i = 0; i < sels.length; i++) {
+      var el = document.querySelector(sels[i]);
+      if (!visible(el)) continue;
+      var r = el.getBoundingClientRect();
+      any = true;
+      if (r.left < x) x = r.left;
+      if (r.top < y) y = r.top;
+      if (r.right > x2) x2 = r.right;
+      if (r.bottom > y2) y2 = r.bottom;
+    }
+    return any ? { x: x, y: y, w: x2 - x, h: y2 - y } : null;
+  }
   function insidePet(x, y) {
-    var layers = document.querySelector('#tp-root .tp-layers');
-    if (!layers) return false;
-    var r = layers.getBoundingClientRect();
-    return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+    var r = hitRect();
+    if (!r) return false;
+    return x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
   }
   document.addEventListener('mousemove', function (e) {
     var over = insidePet(e.clientX, e.clientY);
@@ -17,14 +40,25 @@
   }, true);
 
   // 把命中矩形上报给主进程（它自己轮询光标，避免点击抢时序）
+  var busy = false;
+  document.addEventListener('pointerdown', function () { busy = true }, true);
+  document.addEventListener('pointerup', function () { setTimeout(function () { busy = false }, 120) }, true);
+  document.addEventListener('pointercancel', function () { busy = false }, true);
+
+
   if (api.bounds) {
+    var lastJson = '';
     setInterval(function () {
-      var layers = document.querySelector('#tp-root .tp-layers');
-      if (!layers) return;
-      var r = layers.getBoundingClientRect();
-      api.bounds({ x: r.left, y: r.top, w: r.width, h: r.height, pad: 8 });
-    }, 500);
+      var r = hitRect();
+      var payload = r
+        ? { x: r.x, y: r.y, w: r.w, h: r.h, pad: 10, busy: busy }
+        : { x: 0, y: 0, w: 0, h: 0, pad: 0, busy: busy };
+      var j = JSON.stringify(payload);
+      if (j !== lastJson) { lastJson = j; api.bounds(payload) }
+    }, 150);
   }
+
+
 
   // 2) 去掉所有计费相关节点（余额、今日、本轮、计费设置组）
   var KILL = ['.tp-bal', '.tp-metas', '.tp-met'];
@@ -41,8 +75,8 @@
       var t = (n.textContent || '').trim();
       if (t && BAD.test(t) && !n.classList.contains('tp-switch')) n.remove();
     });
-    var small = scope.querySelector('.tp-head small');
-    if (small) small.textContent = '独立版 · 无计费';
+    // 菜单头部的金额块整个去掉，只留名字与形态
+    scope.querySelectorAll('.tp-mstat').forEach(function (n) { n.remove() });
   }
 
   // 3) 菜单和气泡是整块重绘的，用 observer 每次重绘后清理
