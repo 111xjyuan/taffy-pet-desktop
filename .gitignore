@@ -4,3 +4,6 @@ dist/
 *.tgz
 *.log
 .ui-state.json
+
+# build outputs
+*.zip
